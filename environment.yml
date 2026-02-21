@@ -1,0 +1,6 @@
+name: suzuki_ml
+channels:
+  - defaults
+dependencies:
+  - python=3.10
+prefix: /opt/miniconda3/envs/suzuki_ml
