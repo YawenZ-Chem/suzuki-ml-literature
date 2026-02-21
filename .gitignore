@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+dist/
+build/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Conda / env
+.env
+.venv
+.conda/
+*.conda
+*.mamba
+conda-meta/
+pip-wheel-metadata/
+
+# OS
+.DS_Store
+
+# Data/artifacts (keep raw data out unless small and allowed)
+data/raw/
+data/interim/
+data/processed/
+models/
+runs/
+wandb/
+mlruns/
+
+# Logs
+*.log
+
+# IDE
+.vscode/
+.idea/
