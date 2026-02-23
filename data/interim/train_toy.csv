@@ -1,0 +1,7 @@
+paper_id,reaction_id,smiles_halide,smiles_boronic,smiles_product,catalyst,base,solvent,temperature_C,time_h,scale_mmol,yield_percent,label_3bin,label_binary
+toy,1,Clc1ccccc1,B(O)O,c1ccccc1, Pd(PPh3)4,K2CO3,dioxane,80,12,0.2,85,ge10,success
+toy,2,Brc1ccccc1,B(O)O,c1ccccc1,Pd(dppf)Cl2,K3PO4,THF,65,6,0.2,40,ge10,success
+toy,3,Clc1ccc(F)cc1,B(O)O,c1ccc(F)cc1,Pd(PPh3)4,Na2CO3,EtOH,78,16,0.2,5,1to10,success
+toy,4,Brc1ccc(N)cc1,B(O)O,c1ccc(N)cc1,Pd(OAc)2,K2CO3,DMF,60,8,0.2,0.2,lt1,fail
+toy,5,Clc1ccc(OC)cc1,B(O)O,c1ccc(OC)cc1,Pd(PPh3)4,K2CO3,toluene,90,12,0.2,12,ge10,success
+toy,6,Brc1ccc(Cl)cc1,B(O)O,c1ccc(Cl)cc1,Pd(dppf)Cl2,NaOH,dioxane,80,12,0.2,0.5,lt1,fail
