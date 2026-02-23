@@ -23,11 +23,9 @@ pip-wheel-metadata/
 # OS
 .DS_Store
 
-# Data/artifacts (keep raw data out unless small and allowed)
+# Data/artifacts (keep large raw data out)
 data/raw/*
-data/interim/*
 data/processed/*
-!data/interim/template_reactions.csv
 models/
 runs/
 wandb/
