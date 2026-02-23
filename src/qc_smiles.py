@@ -4,20 +4,20 @@ from rdkit import Chem
 def main(path="data/interim/molecules.csv"):
     df = pd.read_csv(path)
 
-    if "smiles" not in df.columns:
-        print("Column 'smiles' not found in CSV.")
+    if "smiles_raw" not in df.columns:
+        print("Column 'smiles_raw' not found in CSV.")
         return
 
     bad = []
     canonical = []
 
     for i, row in df.iterrows():
-        smi = str(row["smiles"]).strip()
+        smi = str(row["smiles_raw"]).strip()
         mol = Chem.MolFromSmiles(smi)
 
         if mol is None:
             bad.append((row.get("molecule_id", i), smi))
-            canonical.append(None)
+            canonical.append("")
         else:
             canonical.append(Chem.MolToSmiles(mol, canonical=True))
 
@@ -28,6 +28,7 @@ def main(path="data/interim/molecules.csv"):
         print("Invalid SMILES found:")
         for mid, smi in bad:
             print(f"{mid}: {smi}")
+        raise SystemExit("Fix invalid SMILES then re-run.")
     else:
         print("All SMILES valid.")
         print("Canonical SMILES written to:", path)

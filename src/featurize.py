@@ -6,7 +6,7 @@ import numpy as np
 from rdkit import Chem
 from rdkit.Chem import AllChem
 
-LABEL_MAP_3BIN = {"lt1": 0, "1to10": 1, "ge10": 2}
+LABEL_MAP_3BIN = {"low": 0, "mid": 1, "high": 2}
 
 
 def morgan_fp(smiles: str, radius: int = 2, nbits: int = 256) -> np.ndarray:

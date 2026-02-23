@@ -1,119 +1,127 @@
-from __future__ import annotations
+#!/usr/bin/env python3
 import argparse
-from pathlib import Path
 import numpy as np
 import pandas as pd
-import torch
-from torch.utils.data import Dataset, DataLoader
 
-from featurize import Vocab, featurize_row
-from model import ECFPNN
+from rdkit import Chem, DataStructs
+from rdkit.Chem import AllChem
 
-
-class SuzukiDataset(Dataset):
-    def __init__(self, df: pd.DataFrame, vocab: Vocab):
-        self.df = df.reset_index(drop=True)
-        self.vocab = vocab
-
-    def __len__(self): return len(self.df)
-
-    def __getitem__(self, idx: int):
-        row = self.df.iloc[idx]
-        x_fp, x_cat, y = featurize_row(row, self.vocab)
-        return (
-            torch.from_numpy(x_fp),
-            torch.from_numpy(x_cat),
-            torch.tensor(y, dtype=torch.long),
-        )
+from sklearn.model_selection import GroupShuffleSplit
+from sklearn.preprocessing import OneHotEncoder
+# from sklearn.neural_network import MLPClassifier
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import classification_report, confusion_matrix
 
 
-def confusion_matrix(y_true, y_pred, n=3):
-    cm = np.zeros((n, n), dtype=int)
-    for t, p in zip(y_true, y_pred):
-        cm[t, p] += 1
-    return cm
+def morgan_fp(smiles: str, n_bits: int = 256, radius: int = 2) -> np.ndarray:
+    """Return Morgan fingerprint as a (n_bits,) numpy array."""
+    mol = Chem.MolFromSmiles(smiles)
+    if mol is None:
+        raise ValueError(f"RDKit failed to parse SMILES: {smiles}")
+    fp = AllChem.GetMorganFingerprintAsBitVect(mol, radius, nBits=n_bits)
+    arr = np.zeros((n_bits,), dtype=np.int8)
+    DataStructs.ConvertToNumpyArray(fp, arr)
+    return arr
+
+
+def make_fp_matrix(df: pd.DataFrame) -> np.ndarray:
+    """Concatenate halide+boronic+product fingerprints -> (n, 768)."""
+    X = []
+    for _, r in df.iterrows():
+        fp_h = morgan_fp(r["smiles_halide"])
+        fp_b = morgan_fp(r["smiles_boronic"])
+        fp_p = morgan_fp(r["smiles_product"])
+        X.append(np.concatenate([fp_h, fp_b, fp_p], axis=0))
+    return np.vstack(X)
 
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--train_csv", type=str, required=True)
-    ap.add_argument("--valid_csv", type=str, required=True)
-    ap.add_argument("--epochs", type=int, default=10)
-    ap.add_argument("--batch", type=int, default=32)
-    ap.add_argument("--lr", type=float, default=1e-3)
+    ap.add_argument("--in", dest="in_csv", default="data/interim/train_all.csv")
+    ap.add_argument("--seed", type=int, default=42)
+    ap.add_argument("--test_size", type=float, default=0.2)
     args = ap.parse_args()
 
-    train_df = pd.read_csv(args.train_csv)
-    valid_df = pd.read_csv(args.valid_csv)
+    df = pd.read_csv(args.in_csv)
 
-    vocab = Vocab.from_dataframe(train_df)
+    # ---- basic cleaning ----
+    required = [
+        "smiles_halide", "smiles_boronic", "smiles_product",
+        "catalyst", "base", "solvent",
+        "temperature_C", "label_3bin"
+    ]
+    missing_cols = [c for c in required if c not in df.columns]
+    if missing_cols:
+        raise ValueError(f"Missing columns in CSV: {missing_cols}")
 
-    train_ds = SuzukiDataset(train_df, vocab)
-    valid_ds = SuzukiDataset(valid_df, vocab)
+    df = df.dropna(subset=["smiles_halide", "smiles_boronic", "smiles_product", "label_3bin"])
+    df["label_3bin"] = df["label_3bin"].astype(int)
 
-    train_loader = DataLoader(train_ds, batch_size=args.batch, shuffle=True)
-    valid_loader = DataLoader(valid_ds, batch_size=args.batch, shuffle=False)
+    # fill missing condition fields with explicit tokens (safer than NaN)
+    df["catalyst"] = df["catalyst"].fillna("UnknownCatalyst").astype(str)
+    df["base"]     = df["base"].fillna("UnknownBase").astype(str)
+    df["solvent"]  = df["solvent"].fillna("UnknownSolvent").astype(str)
 
-    device = torch.device("mps" if torch.backends.mps.is_available() else "cpu")
-    print("device:", device)
+    # temperature: numeric (if missing, set 0; later you can drop those rows instead)
+    df["temperature_C"] = pd.to_numeric(df["temperature_C"], errors="coerce").fillna(0.0)
 
-    model = ECFPNN(
-        fp_dim=256 * 3,
-        n_cat_catalyst=len(vocab.catalyst2id),
-        n_cat_base=len(vocab.base2id),
-        n_cat_solvent=len(vocab.solvent2id),
-        emb_dim=16,
-        hidden=256,
-        n_classes=3,
-    ).to(device)
-
-    opt = torch.optim.Adam(model.parameters(), lr=args.lr)
-    loss_fn = torch.nn.CrossEntropyLoss()
-
-    for epoch in range(1, args.epochs + 1):
-        model.train()
-        total_loss = 0.0
-        for x_fp, x_cat, y in train_loader:
-            x_fp, x_cat, y = x_fp.to(device), x_cat.to(device), y.to(device)
-            opt.zero_grad()
-            logits = model(x_fp, x_cat)
-            loss = loss_fn(logits, y)
-            loss.backward()
-            opt.step()
-            total_loss += float(loss.item()) * y.size(0)
-
-        model.eval()
-        y_true, y_pred = [], []
-        with torch.no_grad():
-            for x_fp, x_cat, y in valid_loader:
-                x_fp, x_cat = x_fp.to(device), x_cat.to(device)
-                logits = model(x_fp, x_cat)
-                pred = torch.argmax(logits, dim=1).cpu().numpy().tolist()
-                y_pred.extend(pred)
-                y_true.extend(y.numpy().tolist())
-
-        y_true_np = np.array(y_true)
-        y_pred_np = np.array(y_pred)
-        acc = (y_true_np == y_pred_np).mean() if len(y_true_np) else float("nan")
-        cm = confusion_matrix(y_true_np, y_pred_np, n=3)
-
-        print(f"epoch {epoch:02d} | train_loss={total_loss/len(train_ds):.4f} | valid_acc={acc:.3f}")
-        print("confusion matrix (rows=true, cols=pred):\n", cm)
-
-    outdir = Path("models")
-    outdir.mkdir(exist_ok=True)
-    torch.save(
-        {
-            "state_dict": model.state_dict(),
-            "vocab": {
-                "catalyst": vocab.catalyst2id,
-                "base": vocab.base2id,
-                "solvent": vocab.solvent2id,
-            },
-        },
-        outdir / "ecfpnn_3bin.pt",
+    # ---- group key to avoid leakage ----
+    df["group_key"] = (
+        df["smiles_halide"].astype(str) + "|" +
+        df["smiles_boronic"].astype(str) + "|" +
+        df["smiles_product"].astype(str)
     )
-    print("saved:", outdir / "ecfpnn_3bin.pt")
+
+    # ---- group split ----
+    gss = GroupShuffleSplit(test_size=args.test_size, random_state=args.seed)
+    train_idx, val_idx = next(gss.split(df, groups=df["group_key"]))
+    train_df = df.iloc[train_idx].reset_index(drop=True)
+    val_df   = df.iloc[val_idx].reset_index(drop=True)
+
+    print(f"Rows (train/val): {len(train_df)} / {len(val_df)}")
+    print(f"Unique groups (train/val): {train_df['group_key'].nunique()} / {val_df['group_key'].nunique()}")
+    print("Train label counts:\n", train_df["label_3bin"].value_counts().sort_index())
+    print("Val label counts:\n", val_df["label_3bin"].value_counts().sort_index())
+
+    # ---- featurize ----
+    print("Featurizing fingerprints...")
+    X_fp_train = make_fp_matrix(train_df)  # (n_train, 768)
+    X_fp_val   = make_fp_matrix(val_df)    # (n_val, 768)
+
+    print("Encoding categorical conditions...")
+    ohe = OneHotEncoder(handle_unknown="ignore", sparse_output=False)
+    X_cat_train = ohe.fit_transform(train_df[["catalyst", "base", "solvent"]])
+    X_cat_val   = ohe.transform(val_df[["catalyst", "base", "solvent"]])
+
+    temp_train = train_df[["temperature_C"]].to_numpy(dtype=float) / 100.0
+    temp_val   = val_df[["temperature_C"]].to_numpy(dtype=float) / 100.0
+
+    time_train = train_df[["time_h"]].to_numpy(dtype=float) / 10.0   # simple scaling
+    time_val   = val_df[["time_h"]].to_numpy(dtype=float) / 10.0
+
+    X_train = np.hstack([X_fp_train, X_cat_train, temp_train, time_train])
+    X_val   = np.hstack([X_fp_val, X_cat_val, temp_val, time_val])
+
+    y_train = train_df["label_3bin"].to_numpy()
+    y_val   = val_df["label_3bin"].to_numpy()
+
+    print("X_train shape:", X_train.shape, "X_val shape:", X_val.shape)
+
+    # ---- train ----
+    clf = RandomForestClassifier(
+    n_estimators=300,
+    random_state=args.seed,
+    class_weight="balanced"
+)
+
+    clf.fit(X_train, y_train)
+
+    pred = clf.predict(X_val)
+
+    print("\nConfusion matrix (rows=true, cols=pred):")
+    print(confusion_matrix(y_val, pred))
+    print("\nClassification report:")
+    print(classification_report(y_val, pred, digits=3))
 
 
 if __name__ == "__main__":
