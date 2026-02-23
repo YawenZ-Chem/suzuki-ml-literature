@@ -3,4 +3,7 @@ channels:
   - defaults
 dependencies:
   - python=3.10
-prefix: /opt/miniconda3/envs/suzuki_ml
+  - pandas
+  - numpy
+  - scikit-learn
+  - rdkit
