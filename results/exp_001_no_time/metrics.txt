@@ -1,0 +1,8 @@
+Experiment: exp_001_no_time
+Dataset: 53 reactions
+Model: (your model name here, e.g., ECFP Neural Net)
+Features: halide, boronic, product, catalyst, solvent, base, temperature (NO time)
+Accuracy: ~0.60+
+
+Notes:
+- Add confusion matrix / classification report here if you want

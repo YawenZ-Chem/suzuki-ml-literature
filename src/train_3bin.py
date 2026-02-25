@@ -40,22 +40,26 @@ def main():
     ap.add_argument("--in", dest="in_csv", default="data/interim/train_all.csv")
     ap.add_argument("--seed", type=int, default=42)
     ap.add_argument("--test_size", type=float, default=0.2)
+    
+    ap.add_argument("--label_col", type=str, default="label_3bin")
     args = ap.parse_args()
 
     df = pd.read_csv(args.in_csv)
+
+    label_col = args.label_col
 
     # ---- basic cleaning ----
     required = [
         "smiles_halide", "smiles_boronic", "smiles_product",
         "catalyst", "base", "solvent",
-        "temperature_C", "label_3bin"
+        "temperature_C", label_col
     ]
     missing_cols = [c for c in required if c not in df.columns]
     if missing_cols:
         raise ValueError(f"Missing columns in CSV: {missing_cols}")
 
-    df = df.dropna(subset=["smiles_halide", "smiles_boronic", "smiles_product", "label_3bin"])
-    df["label_3bin"] = df["label_3bin"].astype(int)
+    df = df.dropna(subset=["smiles_halide", "smiles_boronic", "smiles_product", label_col])
+    df[label_col] = df[label_col].astype(int)
 
     # fill missing condition fields with explicit tokens (safer than NaN)
     df["catalyst"] = df["catalyst"].fillna("UnknownCatalyst").astype(str)
@@ -64,6 +68,7 @@ def main():
 
     # temperature: numeric (if missing, set 0; later you can drop those rows instead)
     df["temperature_C"] = pd.to_numeric(df["temperature_C"], errors="coerce").fillna(0.0)
+    df["time_h"] = pd.to_numeric(df["time_h"], errors="coerce").fillna(0.0)
 
     # ---- group key to avoid leakage ----
     df["group_key"] = (
@@ -77,11 +82,15 @@ def main():
     train_idx, val_idx = next(gss.split(df, groups=df["group_key"]))
     train_df = df.iloc[train_idx].reset_index(drop=True)
     val_df   = df.iloc[val_idx].reset_index(drop=True)
-
+    
     print(f"Rows (train/val): {len(train_df)} / {len(val_df)}")
     print(f"Unique groups (train/val): {train_df['group_key'].nunique()} / {val_df['group_key'].nunique()}")
-    print("Train label counts:\n", train_df["label_3bin"].value_counts().sort_index())
-    print("Val label counts:\n", val_df["label_3bin"].value_counts().sort_index())
+
+    print("Train label counts:\n",
+      train_df[label_col].value_counts().sort_index())
+
+    print("Val label counts:\n",
+      val_df[label_col].value_counts().sort_index())   
 
     # ---- featurize ----
     print("Featurizing fingerprints...")
@@ -102,8 +111,8 @@ def main():
     X_train = np.hstack([X_fp_train, X_cat_train, temp_train, time_train])
     X_val   = np.hstack([X_fp_val, X_cat_val, temp_val, time_val])
 
-    y_train = train_df["label_3bin"].to_numpy()
-    y_val   = val_df["label_3bin"].to_numpy()
+    y_train = train_df[label_col].to_numpy()
+    y_val   = val_df[label_col].to_numpy()
 
     print("X_train shape:", X_train.shape, "X_val shape:", X_val.shape)
 

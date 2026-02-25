@@ -1,0 +1,8 @@
+Experiment: exp_002_with_time
+Dataset: 53 reactions
+Model: (your model name here, e.g., ECFP Neural Net)
+Features: halide, boronic, product, catalyst, solvent, base, temperature, time
+Accuracy: ~0.75
+
+Notes:
+- Adding time improved accuracy

@@ -1,0 +1,8 @@
+Experiment: exp_003_with_time_rf
+Dataset: 53 reactions
+Model: Random Forest
+Features: halide, boronic, product, catalyst, solvent, base, temperature, time
+Accuracy: ~0.60+
+
+Notes:
+- RF dropped accuracy vs NN on small dataset
