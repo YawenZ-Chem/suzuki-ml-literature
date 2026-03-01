@@ -1,0 +1,11 @@
+Input: data/interim/suzuki_literature_interim_v1.csv
+Label: label_3bin_v2
+Split mode: in_domain_random
+n_splits=30 test_size=0.2 seed=42
+Fingerprint: Morgan radius=2 n_bits=256 (x3 concatenated)
+
+Summary (mean ± std):
+- RandomForest_300_bal: MacroF1=0.535 ± 0.095 | BalAcc=0.541 ± 0.076
+- LogReg_multinomial: MacroF1=0.501 ± 0.102 | BalAcc=0.508 ± 0.089
+- LinearSVC: MacroF1=0.508 ± 0.107 | BalAcc=0.513 ± 0.094
+- MLP_256_128: MacroF1=0.506 ± 0.098 | BalAcc=0.509 ± 0.083
