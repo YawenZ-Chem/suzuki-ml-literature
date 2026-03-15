@@ -71,7 +71,6 @@ See `SCHEMA.md` for full dataset specification.
 ---
 
 ## Data Split Strategy
-## Data Split Strategy
 
 ### 1. Internal Validation (Within Pooled Literature Dataset)
 
