@@ -71,15 +71,55 @@ See `SCHEMA.md` for full dataset specification.
 ---
 
 ## Data Split Strategy
+## Data Split Strategy
 
-1. **Internal split (within pooled literature dataset)**
-   - 80% training
-   - 20% validation
+### 1. Internal Validation (Within Pooled Literature Dataset)
 
-2. **External validation**
-   - One entirely separate “foreign” publication used as an unseen test set
-   - Used to evaluate cross-paper generalization
+To understand model behavior under different levels of distribution shift, three dataset splitting strategies are 
+evaluated.
 
+### In-Domain Random Split
+A stratified row-level split with label balancing.
+
+- Substrates may appear in both training and test sets
+- Measures interpolation within the dataset distribution
+- Provides an approximate upper bound on achievable performance
+
+### Reaction-Group Out-of-Distribution (OOD) Split
+
+The primary evaluation metric uses a reaction-group OOD split.
+
+Reactions are grouped using the key:
+
+`smiles_halide | smiles_boronic | smiles_product`
+
+All reactions belonging to the same reaction group are assigned entirely to either the training or test set using 
+`GroupShuffleSplit`. This prevents leakage of identical substrate combinations across splits.
+
+Importantly, **papers are not used as grouping units in this split**. Therefore reactions from the same publication may 
+appear in both the training and test sets, but the **specific reaction pairs in the test set are never seen during 
+training**.
+
+Across all 30 repeated splits we verified that every paper appearing in the test set also appears in the training set. 
+Thus this evaluation measures **generalization to unseen reaction pairs rather than unseen publications**.
+
+### Paper-Level Split
+
+For comparison, a paper-level split groups reactions by `paper_id`, assigning entire publications to either training or 
+testing sets.
+
+This evaluates **cross-publication generalization**. Because the dataset contains a limited number of papers with 
+uneven reaction counts, this split exhibits higher variance and is used primarily as exploratory analysis.
+
+---
+
+### 2. External Validation
+
+An additional evaluation will be performed using a completely separate Suzuki methodology publication that is **not 
+included in the pooled training dataset**.
+
+This provides a true external benchmark for assessing cross-paper generalization beyond the internal dataset splits.
+ 
 ---
 
 ## Pipeline Overview
