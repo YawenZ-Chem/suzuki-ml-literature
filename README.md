@@ -121,6 +121,25 @@ included in the pooled training dataset**.
 This provides a true external benchmark for assessing cross-paper generalization beyond the internal dataset splits.
  
 ---
+### Fingerprint Resolution Experiment
+
+Morgan fingerprints were generated with radius = 2 for the halide,
+boronic acid, and product molecules and concatenated to form the
+structural feature vector.
+
+Fingerprint resolution was evaluated using 256, 512, and 1024 bits
+under the reaction-group OOD evaluation protocol (30 repeated splits).
+
+| nBits | RandomForest Macro F1 |
+|------|----------------------|
+| 256 | 0.462 ± 0.091 |
+| 512 | 0.456 ± 0.083 |
+| 1024 | **0.473 ± 0.102** |
+
+Based on this experiment, **1024-bit fingerprints were selected for
+subsequent experiments**.
+
+---
 
 ## Pipeline Overview
 
