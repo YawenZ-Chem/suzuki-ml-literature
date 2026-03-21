@@ -34,6 +34,14 @@ def make_fp_matrix(df: pd.DataFrame) -> np.ndarray:
         X.append(np.concatenate([fp_h, fp_b, fp_p], axis=0))
     return np.vstack(X)
 
+def assign_label_3bin_v2(y):
+    y = float(y)
+    if y < 60:
+        return 0
+    elif y < 85:
+        return 1
+    else:
+        return 2
 
 def main():
     ap = argparse.ArgumentParser()
@@ -132,6 +140,70 @@ def main():
     print("\nClassification report:")
     print(classification_report(y_val, pred, digits=3))
 
+    # ---- external evaluation on foreign dataset ----
+    print("\n=== External evaluation: foreign_paper_05.csv ===")
+
+    foreign = pd.read_csv("data/interim/foreign_paper_05.csv")
+
+    missing_cols_foreign = [c for c in required if c not in foreign.columns]
+    if missing_cols_foreign:
+        raise ValueError(f"Missing columns in foreign CSV: {missing_cols_foreign}")
+
+    foreign = foreign.dropna(subset=["smiles_halide", "smiles_boronic", "smiles_product", "yield_percent"]).copy()
+
+    if label_col == "label_3bin_v2":
+        foreign[label_col] = foreign["yield_percent"].apply(assign_label_3bin_v2)
+    else:
+        foreign = foreign.dropna(subset=[label_col]).copy()
+        foreign[label_col] = foreign[label_col].astype(int)
+
+    foreign["catalyst"] = foreign["catalyst"].fillna("UnknownCatalyst").astype(str)
+    foreign["base"]     = foreign["base"].fillna("UnknownBase").astype(str)
+    foreign["solvent"]  = foreign["solvent"].fillna("UnknownSolvent").astype(str)
+
+    foreign["temperature_C"] = pd.to_numeric(foreign["temperature_C"], errors="coerce").fillna(0.0)
+    foreign["time_h"] = pd.to_numeric(foreign["time_h"], errors="coerce").fillna(0.0)
+
+    print(f"Rows (foreign): {len(foreign)}")
+    print("Foreign label counts:\n", foreign[label_col].value_counts().sort_index())
+
+    if len(foreign) == 0:
+        raise ValueError("Foreign dataset has 0 usable rows after filtering. Check yield_percent or labels.") 
+
+    print("Featurizing foreign fingerprints...")
+    X_fp_foreign = make_fp_matrix(foreign)
+
+    print("Encoding foreign categorical conditions...")
+    X_cat_foreign = ohe.transform(foreign[["catalyst", "base", "solvent"]])
+
+    temp_foreign = foreign[["temperature_C"]].to_numpy(dtype=float) / 100.0
+    time_foreign = foreign[["time_h"]].to_numpy(dtype=float) / 10.0
+
+    X_foreign = np.hstack([X_fp_foreign, X_cat_foreign, temp_foreign, time_foreign])
+    y_foreign = foreign[label_col].to_numpy()
+
+    print("X_foreign shape:", X_foreign.shape)
+
+    pred_foreign = clf.predict(X_foreign)
+
+    print("\nForeign confusion matrix (rows=true, cols=pred):")
+    print(confusion_matrix(y_foreign, pred_foreign))
+    print("\nForeign classification report:")
+    print(classification_report(y_foreign, pred_foreign, digits=3))
+
+# ---- save predictions ----
+    foreign_out = foreign.copy()
+    foreign_out["pred_label"] = pred_foreign
+
+    import os
+    os.makedirs("results/exp_011_foreign_dataset", exist_ok=True)
+
+    foreign_out.to_csv(
+        "results/exp_011_foreign_dataset/predictions.csv",
+        index=False
+)
+
+    print("Saved predictions to results/exp_011_foreign_dataset/predictions.csv")
 
 if __name__ == "__main__":
     main()
